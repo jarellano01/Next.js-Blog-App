@@ -1,3 +1,6 @@
+CREATE EXTENSION IF NOT EXISTS moddatetime
+	SCHEMA "extensions";
+
 create table
   public.profiles (
     id uuid not null,
@@ -23,28 +26,6 @@ create table
   ) tablespace pg_default;
 
   create table
-  public.comments (
-    id uuid not null default gen_random_uuid (),
-    comment text null default ''::text,
-    created_at timestamp with time zone null default now(),
-    user_id uuid null,
-    post_id uuid null,
-    constraint comments_pkey primary key (id),
-    constraint comments_post_id_fkey foreign key (post_id) references posts (id) on delete cascade,
-    constraint comments_user_id_fkey foreign key (user_id) references profiles (id) on delete cascade
-  ) tablespace pg_default;
-
-  create table
-  public.bookmarks (
-    id uuid not null,
-    user_id uuid null,
-    created_at timestamp with time zone null default now(),
-    constraint bookmarks_pkey primary key (id),
-    constraint bookmarks_id_fkey foreign key (id) references posts (id) on delete cascade,
-    constraint bookmarks_user_id_fkey foreign key (user_id) references auth.users (id) on delete cascade
-  ) tablespace pg_default;
-
-  create table
   public.posts (
     id uuid not null default gen_random_uuid (),
     category_id uuid null,
@@ -67,6 +48,30 @@ create table
 create trigger handle_updated_at before
 update on posts for each row
 execute function moddatetime ('updated_at');
+
+
+  create table
+  public.comments (
+    id uuid not null default gen_random_uuid (),
+    comment text null default ''::text,
+    created_at timestamp with time zone null default now(),
+    user_id uuid null,
+    post_id uuid null,
+    constraint comments_pkey primary key (id),
+    constraint comments_post_id_fkey foreign key (post_id) references posts (id) on delete cascade,
+    constraint comments_user_id_fkey foreign key (user_id) references profiles (id) on delete cascade
+  ) tablespace pg_default;
+
+  create table
+  public.bookmarks (
+    id uuid not null,
+    user_id uuid null,
+    created_at timestamp with time zone null default now(),
+    constraint bookmarks_pkey primary key (id),
+    constraint bookmarks_id_fkey foreign key (id) references posts (id) on delete cascade,
+    constraint bookmarks_user_id_fkey foreign key (user_id) references auth.users (id) on delete cascade
+  ) tablespace pg_default;
+
 
 create table
   public.drafts (

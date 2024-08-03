@@ -32,18 +32,19 @@ import { profileFormSchema } from "@/lib/validation/profile";
 import { Profile } from "@/types/collection";
 import { createClient } from "@/utils/supabase/client";
 import { zodResolver } from "@hookform/resolvers/zod";
-import Uppy from "@uppy/core";
+import { Session } from "@supabase/supabase-js";
 import "@uppy/core/dist/style.min.css";
 import "@uppy/dashboard/dist/style.min.css";
 import { DashboardModal } from "@uppy/react";
-import Tus from "@uppy/tus";
 import { Loader2 as SpinnerIcon } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import React from "react";
 import { FC, useState } from "react";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import { z } from "zod";
+import {downloadImage, useUppy} from "@/utils/supabase/use-uppy"
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
@@ -51,27 +52,28 @@ interface ProtectedSettingsProfileProps {
   user: Profile;
 }
 
-async function downloadImage(
-  bucketName: string,
-  userId: string,
-  fileName: string,
-) {
-  const supabase = createClient();
-  const { data } = supabase.storage
-    .from(bucketName)
-    .getPublicUrl(`${userId}/${fileName}`);
-
-  if (data.publicUrl) {
-    return data.publicUrl;
-  }
-
-  return null;
-}
-
 const ProtectedSettingsProfile: FC<ProtectedSettingsProfileProps> = ({
   user,
 }) => {
   const router = useRouter();
+  const supabase = createClient();
+  const [session, setSession] = React.useState<Session | null>(null);
+  // Check authentitication and bookmark states
+  React.useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [session?.user.id, supabase.auth]);
+
+  
 
   // Setup Uppy with Supabase
   const [showModal, setShowModal] = useState<boolean>(false);
@@ -81,33 +83,8 @@ const ProtectedSettingsProfile: FC<ProtectedSettingsProfileProps> = ({
   );
   const bucketName =
     process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET_PROFILE || "profile";
-  const token = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const projectId = process.env.NEXT_PUBLIC_SUPABASE_PROJECT_ID;
-  const supabaseUploadURL = `https://${projectId}.supabase.co/storage/v1/upload/resumable`;
 
-  // Uppy instance for cover photo upload
-  var uppy = new Uppy({
-    id: "avatar",
-    autoProceed: false,
-    debug: true,
-    allowMultipleUploadBatches: true,
-    restrictions: {
-      maxFileSize: 6000000,
-      maxNumberOfFiles: 1,
-    },
-  }).use(Tus, {
-    endpoint: supabaseUploadURL,
-    headers: {
-      authorization: `Bearer ${token}`,
-    },
-    chunkSize: 6 * 1024 * 1024,
-    allowedMetaFields: [
-      "bucketName",
-      "objectName",
-      "contentType",
-      "cacheControl",
-    ],
-  });
+  var uppy = useUppy('avatar');
 
   uppy.on("file-added", (file) => {
     file.meta = {
@@ -119,11 +96,10 @@ const ProtectedSettingsProfile: FC<ProtectedSettingsProfileProps> = ({
   });
 
   uppy.on("complete", async (result) => {
-    if (result.successful.length > 0) {
+    if (result.successful.length > 0 && result.successful[0]?.meta?.objectName) {
       const avatarUrl = await downloadImage(
         bucketName,
-        user.id,
-        result.successful[0].name,
+        result.successful[0]?.meta?.objectName as string
       );
       setAvatarUrl(avatarUrl);
       toast.success(protectedProfileConfig.successMessageImageUpload);

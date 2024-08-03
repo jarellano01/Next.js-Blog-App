@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
+    serverActions: {
+      allowedOrigins: [
+        "renderer.worksmart.dev"
+      ],
+    },
     optimizePackageImports: [
       "icons",
       "icons/categories",
@@ -44,7 +49,7 @@ const nextConfig = {
       },
       {
         protocol: "https",
-        hostname: "iskzuogcmkzumadqjnbv.supabase.co",
+        hostname: "vgtgenskbjtryuvoyqmg.supabase.co",
       },
     ],
   },

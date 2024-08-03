@@ -46,6 +46,7 @@ const ProtectedProfileDropDown = () => {
   }, [supabase.auth]);
 
   useEffect(() => {
+    if(!session?.user.id) return;
     async function fetchAvatar() {
       const { data, error } = await supabase
         .from("profiles")

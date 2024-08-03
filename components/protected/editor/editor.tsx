@@ -56,6 +56,7 @@ import {
   EditorUploadGalleryImageTableEmpty,
 } from "./upload";
 import { defaultEditorContent } from "./wysiwyg/default-content";
+import { downloadImage, useUppy } from "@/utils/supabase/use-uppy";
 
 export const dynamic = "force-dynamic";
 
@@ -110,28 +111,7 @@ const Editor: FC<EditorProps> = ({
 
   // Uppy instance for cover photo upload
 
-  var uppyCover = new Uppy({
-    id: "cover-image",
-    autoProceed: false,
-    debug: false,
-    allowMultipleUploadBatches: true,
-    restrictions: {
-      maxFileSize: 6000000,
-      maxNumberOfFiles: 1,
-    },
-  }).use(Tus, {
-    endpoint: supabaseUploadURL,
-    headers: {
-      authorization: `Bearer ${token}`,
-    },
-    chunkSize: 6 * 1024 * 1024,
-    allowedMetaFields: [
-      "bucketName",
-      "objectName",
-      "contentType",
-      "cacheControl",
-    ],
-  });
+  var uppyCover = useUppy('cover-image');
 
   uppyCover.on("file-added", (file) => {
     file.meta = {
@@ -144,57 +124,24 @@ const Editor: FC<EditorProps> = ({
 
   uppyCover.on("complete", async (result) => {
     if (result.successful.length > 0) {
+      if (result.successful.length > 0 && result.successful[0]?.meta?.objectName) {
+        const avatarUrl = await downloadImage(
+          bucketNameCoverImage,
+          result.successful[0]?.meta?.objectName as string,
+        );
+        form.setValue("image", avatarUrl || '')
+        toast.success(protectedEditorConfig.successMessageImageUpload);
+      } else {
+        toast.error(protectedEditorConfig.errorMessageImageUpload);
+      }
       toast.success(protectedEditorConfig.successMessageImageUpload);
-      router.refresh();
+      // router.refresh();
     } else {
       toast.error(protectedEditorConfig.errorMessageImageUpload);
     }
     setShowCoverModal(false);
   });
 
-  // Uppy instance for gallery uploads
-  var uppyGallery = new Uppy({
-    id: "gallery-image",
-    autoProceed: false,
-    debug: false,
-    allowMultipleUploadBatches: true,
-    restrictions: {
-      maxFileSize: 6000000,
-      maxNumberOfFiles: allowedNumberOfImages,
-    },
-  }).use(Tus, {
-    endpoint: supabaseUploadURL,
-    headers: {
-      authorization: `Bearer ${token}`,
-    },
-    chunkSize: 6 * 1024 * 1024,
-    allowedMetaFields: [
-      "bucketName",
-      "objectName",
-      "contentType",
-      "cacheControl",
-    ],
-  });
-
-  uppyGallery.on("file-added", (file) => {
-    file.meta = {
-      ...file.meta,
-      bucketName: bucketNameGalleryImage,
-      objectName: `${userId}/${post.id}/${file.name}`,
-      contentType: file.type,
-    };
-  });
-
-  uppyGallery.on("complete", async (result) => {
-    if (result.successful.length > 0) {
-      // Auto save post
-      toast.success(protectedEditorConfig.successMessageImageUpload);
-      router.refresh();
-    } else {
-      toast.error(protectedEditorConfig.errorMessageImageUpload);
-    }
-    setShowGalleryModal(false);
-  });
 
   // Default values for the form
   const defaultValues: Partial<EditorFormValues> = {
@@ -212,6 +159,7 @@ const Editor: FC<EditorProps> = ({
     mode: "onChange",
   });
 
+  const currentCoverImage = form.getValues("image");
   async function onSubmit(data: EditorFormValues) {
     setShowLoadingAlert(true);
     setIsSaving(true);
@@ -228,7 +176,7 @@ const Editor: FC<EditorProps> = ({
 
     if (response) {
       toast.success(protectedEditorConfig.successMessage);
-      router.push(`/editor/posts?search=refresh`);
+      // router.push(`/editor/posts?search=refresh`);
     } else {
       toast.error(protectedEditorConfig.errorMessage);
     }
@@ -357,7 +305,7 @@ const Editor: FC<EditorProps> = ({
               </CardDescription>
             </CardHeader>
             <Separator className="mb-8" />
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 test">
               {/* Image */}
               <FormField
                 control={form.control}
@@ -388,7 +336,7 @@ const Editor: FC<EditorProps> = ({
                   proudlyDisplayPoweredByUppy={false}
                   showLinkToFileUploadResult
                 />
-                {coverImageFileName === "" && (
+                {currentCoverImage === "" && (
                   <div className="col-span-full">
                     <div className="mb-1 flex items-center gap-x-3">
                       <button
@@ -405,68 +353,15 @@ const Editor: FC<EditorProps> = ({
                   </div>
                 )}
 
-                {coverImageFileName !== "" ? (
+                {currentCoverImage !== "" ? (
                   <EditorUploadCoverImageItem
                     userId={userId}
                     postId={post.id}
                     fileName={coverImageFileName}
-                    imageUrl={coverImagePublicUrl}
+                    imageUrl={currentCoverImage || ''}
                   />
                 ) : (
                   <EditorUploadCoverImagePlaceHolder />
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Gallery Images */}
-          <Card className="max-w-2xl">
-            <CardHeader>
-              <CardTitle>{protectedEditorConfig.galleryImageTitle}</CardTitle>
-              <CardDescription>
-                {protectedEditorConfig.galleryImageDescription +
-                  allowedNumberOfImages +
-                  "  images."}
-              </CardDescription>
-            </CardHeader>
-            <Separator className="mb-8" />
-            <CardContent className="space-y-4">
-              <div className="flex w-full flex-col">
-                <DashboardModal
-                  uppy={uppyGallery}
-                  open={showGalleryModal}
-                  onRequestClose={() => setShowGalleryModal(false)}
-                  disablePageScrollWhenModalOpen={false}
-                  showSelectedFiles
-                  showRemoveButtonAfterComplete
-                  note={protectedEditorConfig.formImageNote}
-                  proudlyDisplayPoweredByUppy={false}
-                  showLinkToFileUploadResult
-                />
-                <div className="col-span-full">
-                  <div className="mb-3 flex items-center gap-x-3">
-                    <button
-                      onClick={() => setShowGalleryModal(!showGalleryModal)}
-                      type="button"
-                      className="inline-flex items-center rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                    >
-                      <PaperClipIcon className="mr-1 h-4 w-4" />
-                      <span className="">
-                        {protectedEditorConfig.chooseFile}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                {galleryImagePublicUrls.length > 0 ? (
-                  <EditorUploadGalleryImageTable
-                    userId={userId}
-                    postId={post.id}
-                    fileNames={galleryImageFileNames}
-                    imageUrls={galleryImagePublicUrls}
-                  />
-                ) : (
-                  <EditorUploadGalleryImageTableEmpty />
                 )}
               </div>
             </CardContent>
